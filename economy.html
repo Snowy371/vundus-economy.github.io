@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Vundus Economic System</title>
+<style>
+  :root{
+    --bg1:#2b2f77; --bg2:#5f4bb6; --card:#0b1220;
+    --accent:#ffd27f; --accent-2:#2dd4bf; --muted:#b9c6d1;
+    --danger:#ff6b6b; --radius:12px; font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; min-height:100vh;
+    background: linear-gradient(135deg,var(--bg1), var(--bg2));
+    color:#fff; -webkit-font-smoothing:antialiased; display:flex; align-items:center; justify-content:center; padding:28px;
+  }
+  .app{width:100%;max-width:1100px}
+  header{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px}
+  h1{margin:0;font-size:1.3rem}
+  .sub{color:var(--muted);font-size:0.92rem}
+  .controls{display:flex;gap:8px;align-items:center}
+  .card{background:linear-gradient(180deg, rgba(11,18,32,0.7), rgba(255,255,255,0.03));padding:14px;border-radius:var(--radius);box-shadow:0 10px 30px rgba(0,0,0,0.45)}
+  .layout{display:grid;grid-template-columns:1fr 360px;gap:14px}
+  @media (max-width:960px){.layout{grid-template-columns:1fr}}
+  .input-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  input[type="text"], input[type="number"], select{
+    background:transparent;border:1px solid rgba(255,255,255,0.06);color:inherit;padding:10px;border-radius:8px;min-width:0;font-size:0.95rem;
+  }
+  button{background:transparent;border:1px solid rgba(255,255,255,0.06);color:var(--accent);padding:9px 12px;border-radius:8px;cursor:pointer;font-weight:700}
+  button.primary{background:var(--accent);color:#081018;border:none}
+  button.danger{background:var(--danger);color:#081018;border:none}
+  grid {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: 1fr; /* single column */
+  gap: 12px;
+}
+  .country{padding:12px;border-radius:10px;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.00));border:1px solid rgba(255,255,255,0.02);display:flex;flex-direction:column;gap:10px;transition:transform .12s}
+  .country:hover{transform:translateY(-6px)}
+  .row{display:flex;align-items:center;justify-content:space-between;gap:8px}
+  .name{font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}
+  .balance{color:var(--muted);font-weight:700}
+  .quick{display:flex;gap:6px;flex-wrap:wrap}
+  .small{padding:6px 8px;font-size:0.9rem;border-radius:6px}
+  .muted{color:var(--muted);font-size:0.9rem}
+  footer{margin-top:18px;color:var(--muted);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px}
+</style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <div>
+        <h1>💰 Vundus Economic System</h1>
+        <div class="sub">Vundus Economic System, Built only for Vundus</div>
+      </div>
+      <div class="controls">
+        <button id="exportBtn">Export</button>
+        <button id="importBtn">Import</button>
+        <input id="fileInput" type="file" accept=".json" style="display:none" />
+        <button id="resetBtn" class="danger">Reset All</button>
+      </div>
+    </header>
+
+    <main class="layout">
+      <section class="card">
+        <div class="input-row">
+          <input id="countryName" type="text" placeholder="Country name (e.g. Pacemria)" />
+          <input id="initialVun" type="number" placeholder="Initial Vunbars" style="width:140px" />
+          <input id="gdpInput" type="number" placeholder="GDP (per day)" style="width:140px" />
+          <button id="addBtn" class="primary">Add Country</button>
+          <button id="clearBtn" class="small">Clear</button>
+        </div>
+
+        <div id="grid" class="grid" aria-live="polite"></div>
+      </section>
+
+      <aside class="card">
+        <h3 style="margin:0 0 8px 0">Selected Country</h3>
+        <div id="selectedInfo" class="muted">Click a country to select it for quick edits.</div>
+
+        <div style="margin-top:12px">
+          <label class="muted" style="display:block;margin-bottom:6px">Quick custom amount (Vunbars)</label>
+          <div style="display:flex;gap:8px">
+            <input id="customAmt" type="number" placeholder="e.g. 250" style="flex:1" />
+            <button id="addCustom" class="primary">Add</button>
+            <button id="subCustom" class="small">Subtract</button>
+          </div>
+        </div>
+
+        <hr style="margin:12px 0;border:none;border-top:1px solid rgba(255,255,255,0.03)" />
+
+        <div class="muted" style="font-size:0.93rem">Notes:
+          <ul style="margin:6px 0 0 18px">
+            <li>Automatic GDP applies once per calendar day (tracked in your browser).</li>
+            <li>Use Export to backup and Import to restore on another device.</li>
+          </ul>
+        </div>
+      </aside>
+    </main>
+
+    <footer>
+      <div id="lastSaved" class="muted">Last saved: —</div>
+      <div class="muted">Unit: <strong>Vunbars</strong> — No limits on values or countries.</div>
+    </footer>
+  </div>
+
+<script>
+(() => {
+  const LS_KEY = 'vunbar_tracker_stylish_v1';
+  const grid = document.getElementById('grid');
+  const addBtn = document.getElementById('addBtn');
+  const clearBtn = document.getElementById('clearBtn');
+  const countryNameInput = document.getElementById('countryName');
+  const initialVunInput = document.getElementById('initialVun');
+  const gdpInput = document.getElementById('gdpInput');
+  const selectedInfo = document.getElementById('selectedInfo');
+  const customAmt = document.getElementById('customAmt');
+  const addCustom = document.getElementById('addCustom');
+  const subCustom = document.getElementById('subCustom');
+  const lastSaved = document.getElementById('lastSaved');
+  const exportBtn = document.getElementById('exportBtn');
+  const importBtn = document.getElementById('importBtn');
+  const fileInput = document.getElementById('fileInput');
+  const resetBtn = document.getElementById('resetBtn');
+
+  // state
+  let state = loadState();
+  let selectedId = null;
+
+  // helpers
+  function uid(){
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
+    return 'id-' + Date.now() + '-' + Math.floor(Math.random()*1e6);
+  }
+  function todayString(){
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth()+1).padStart(2,'0');
+    const day = String(d.getDate()).padStart(2,'0');
+    return `${y}-${m}-${day}`;
+  }
+  function parseYMD(s){
+    if (!s) return null;
+    const p = s.split('-'); if (p.length !== 3) return null;
+    return new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2]));
+  }
+  function daysBetween(aYmd, bYmd){
+    const a = parseYMD(aYmd); const b = parseYMD(bYmd);
+    if (!a || !b) return 0;
+    return Math.floor((b.getTime() - a.getTime()) / 86400000);
+  }
+  function formatNum(n){
+    if (!isFinite(n)) return '0';
+    if (Number.isInteger(n)) return n.toLocaleString();
+    return n.toLocaleString(undefined, { maximumFractionDigits: 2 });
+  }
+  function escapeText(s){
+    const d = document.createElement('div'); d.textContent = s; return d.innerHTML;
+  }
+
+  // load/save
+  function loadState(){
+    try {
+      const raw = localStorage.getItem(LS_KEY);
+      if (!raw) return { countries: [], updatedAt: null };
+      const parsed = JSON.parse(raw);
+      if (!parsed || !Array.isArray(parsed.countries)) return { countries: [], updatedAt: null };
+      return parsed;
+    } catch (e) {
+      console.error('load error', e);
+      return { countries: [], updatedAt: null };
+    }
+  }
+  function saveState(){
+    state.updatedAt = new Date().toISOString();
+    localStorage.setItem(LS_KEY, JSON.stringify(state));
+    updateLastSaved();
+  }
+  function updateLastSaved(){
+    lastSaved.textContent = state.updatedAt ? 'Last saved: ' + new Date(state.updatedAt).toLocaleString() : 'Last saved: —';
+  }
+
+  // apply automatic GDP for days missed (once per calendar day)
+  function applyAutomaticGDP(){
+    const today = todayString();
+    let changed = false;
+    state.countries.forEach(c => {
+      const last = c.lastGDPDate || today;
+      const daysMissed = daysBetween(last, today);
+      if (daysMissed > 0 && Number(c.gdp)){
+        const total = Number(c.gdp) * daysMissed;
+        c.vunbars = Math.round(((Number(c.vunbars)||0) + total) * 100) / 100;
+        c.lastGDPDate = today;
+        changed = true;
+      } else if (daysMissed > 0){
+        // update lastGDPDate even if gdp is 0
+        c.lastGDPDate = today;
+        changed = true;
+      }
+    });
+    if (changed) saveState();
+  }
+
+  // render UI
+  function render(){
+    grid.innerHTML = '';
+    if (!state.countries.length){
+      const empty = document.createElement('div'); empty.className = 'muted'; empty.style.padding='12px'; empty.textContent = 'No countries yet — add one above.';
+      grid.appendChild(empty);
+      selectedInfo.textContent = 'No country selected. Click a country to edit quickly.';
+      return;
+    }
+
+    state.countries.forEach(c => {
+      const card = document.createElement('div'); card.className = 'country'; card.dataset.id = c.id;
+
+      // row1: name + balance
+      const row1 = document.createElement('div'); row1.className = 'row';
+      const left = document.createElement('div'); left.style.display='flex'; left.style.flexDirection='column'; left.style.gap='6px';
+      const nameEl = document.createElement('div'); nameEl.className='name'; nameEl.textContent = c.name; nameEl.title='Click to rename';
+      const balEl = document.createElement('div'); balEl.className='balance'; balEl.textContent = formatNum(c.vunbars) + ' Vunbars';
+      left.appendChild(nameEl); left.appendChild(balEl);
+      row1.appendChild(left);
+
+      // quick buttons
+      const quickWrap = document.createElement('div'); quickWrap.className='quick';
+      ['+1','+10','-1','-10'].forEach(lbl => {
+        const btn = document.createElement('button'); btn.className='small'; btn.textContent = lbl;
+        btn.addEventListener('click', (ev) => {
+          ev.stopPropagation();
+          const val = Number(lbl.replace('+',''));
+          const change = lbl.startsWith('-') ? -Math.abs(val) : Math.abs(val);
+          changeBalance(c.id, change);
+        });
+        quickWrap.appendChild(btn);
+      });
+      row1.appendChild(quickWrap);
+
+      // row2: custom input + manual GDP + edit + remove
+      const row2 = document.createElement('div'); row2.className='row';
+      const customWrap = document.createElement('div'); customWrap.style.display='flex'; customWrap.style.gap='8px'; customWrap.style.alignItems='center';
+      const customInput = document.createElement('input'); customInput.type='number'; customInput.placeholder='Custom';
+      customInput.style.padding='8px'; customInput.style.borderRadius='6px'; customInput.style.border='1px solid rgba(255,255,255,0.03)'; customInput.style.width='110px';
+      const addBtn = document.createElement('button'); addBtn.className='small'; addBtn.textContent='Add';
+      const subBtn = document.createElement('button'); subBtn.className='small'; subBtn.textContent='Sub';
+      addBtn.addEventListener('click', () => {
+        const v = Number(customInput.value);
+        if (!Number.isFinite(v)) return alert('Enter a valid number');
+        changeBalance(c.id, Math.abs(v));
+        customInput.value = '';
+      });
+      subBtn.addEventListener('click', () => {
+        const v = Number(customInput.value);
+        if (!Number.isFinite(v)) return alert('Enter a valid number');
+        changeBalance(c.id, -Math.abs(v));
+        customInput.value = '';
+      });
+      customWrap.appendChild(customInput); customWrap.appendChild(addBtn); customWrap.appendChild(subBtn);
+      row2.appendChild(customWrap);
+
+      const rightBtns = document.createElement('div'); rightBtns.style.display='flex'; rightBtns.style.gap='8px'; rightBtns.style.alignItems='center';
+      const gdpBtn = document.createElement('button'); gdpBtn.className='small'; gdpBtn.textContent='Add GDP Now';
+      gdpBtn.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        changeBalance(c.id, Number(c.gdp) || 0);
+      });
+      const editBtn = document.createElement('button'); editBtn.className='small'; editBtn.textContent='Edit';
+      editBtn.addEventListener('click', (ev) => { ev.stopPropagation(); editCountryPrompt(c.id); });
+      const remBtn = document.createElement('button'); remBtn.className='small'; remBtn.style.color='#ffb4b4'; remBtn.textContent='Remove';
+      remBtn.addEventListener('click', (ev) => { ev.stopPropagation(); if (confirm(`Remove "${c.name}"? This cannot be undone.`)) removeCountry(c.id); });
+      rightBtns.appendChild(gdpBtn); rightBtns.appendChild(editBtn); rightBtns.appendChild(remBtn);
+      row2.appendChild(rightBtns);
+
+      // row3: GDP and last date
+      const row3 = document.createElement('div'); row3.style.display='flex'; row3.style.justifyContent='space-between'; row3.style.alignItems='center';
+      const info = document.createElement('div'); info.className='muted'; info.textContent = `GDP/day: ${formatNum(Number(c.gdp)||0)}  •  Last GDP applied: ${c.lastGDPDate || '—'}`;
+      row3.appendChild(info);
+
+      // name click rename + card click select
+      nameEl.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        const newName = prompt('Rename country:', c.name);
+        if (newName === null) return;
+        const trimmed = newName.trim();
+        if (!trimmed) return alert('Name cannot be empty.');
+        if (state.countries.some(x => x.name.toLowerCase() === trimmed.toLowerCase() && x.id !== c.id)) return alert('Another country with that name already exists.');
+        c.name = trimmed; saveState(); render();
+      });
+      card.addEventListener('click', () => {
+        selectedId = c.id;
+        selectedInfo.innerHTML = `<strong>${escapeText(c.name)}</strong><div class="muted">Balance: <strong>${formatNum(c.vunbars)} Vunbars</strong></div><div class="muted">GDP/day: <strong>${formatNum(Number(c.gdp)||0)}</strong></div>`;
+      });
+
+      // assemble
+      card.appendChild(row1); card.appendChild(row2); card.appendChild(row3);
+      grid.appendChild(card);
+    });
+  }
+
+  // actions
+  function changeBalance(id, delta){
+    const c = state.countries.find(x => x.id === id);
+    if (!c) return;
+    c.vunbars = Math.round(((Number(c.vunbars)||0) + Number(delta || 0)) * 100) / 100;
+    if (!isFinite(c.vunbars)) c.vunbars = 0;
+    saveState(); render();
+    if (selectedId === id) {
+      selectedInfo.innerHTML = `<strong>${escapeText(c.name)}</strong><div class="muted">Balance: <strong>${formatNum(c.vunbars)} Vunbars</strong></div><div class="muted">GDP/day: <strong>${formatNum(Number(c.gdp)||0)}</strong></div>`;
+    }
+  }
+
+  function addCountryFromInputs(){
+    const name = countryNameInput.value.trim();
+    if (!name) { alert('Enter a country name'); return; }
+    if (state.countries.some(c => c.name.toLowerCase() === name.toLowerCase())) { alert('That country already exists.'); return; }
+    const initial = Number(initialVunInput.value) || 0;
+    const gdp = Number(gdpInput.value) || 0;
+    const newC = { id: uid(), name, vunbars: Math.round(initial * 100) / 100, gdp: Math.round(gdp * 100) / 100, lastGDPDate: todayString() };
+    state.countries.push(newC);
+    saveState(); render();
+    countryNameInput.value = ''; initialVunInput.value = ''; gdpInput.value = '';
+    selectedId = newC.id;
+    selectedInfo.innerHTML = `<strong>${escapeText(newC.name)}</strong><div class="muted">Balance: <strong>${formatNum(newC.vunbars)} Vunbars</strong></div>`;
+  }
+
+  function removeCountry(id){
+    state.countries = state.countries.filter(c => c.id !== id);
+    if (selectedId === id) { selectedId = null; selectedInfo.textContent = 'No country selected. Click a country to edit quickly.'; }
+    saveState(); render();
+  }
+
+  function editCountryPrompt(id){
+    const c = state.countries.find(x => x.id === id); if (!c) return;
+    const newName = prompt('Country name:', c.name); if (newName === null) return;
+    const trimmed = newName.trim(); if (!trimmed) return alert('Name cannot be empty.');
+    if (state.countries.some(x => x.name.toLowerCase() === trimmed.toLowerCase() && x.id !== id)) return alert('Another country with that name already exists.');
+    const newBalStr = prompt('Balance (Vunbars):', String(c.vunbars));
+    if (newBalStr === null) return;
+    const newGDPStr = prompt('GDP per day:', String(c.gdp || 0));
+    if (newGDPStr === null) return;
+    const nb = Number(newBalStr); const ng = Number(newGDPStr);
+    c.name = trimmed;
+    c.vunbars = Number.isFinite(nb) ? Math.round(nb * 100) / 100 : c.vunbars;
+    c.gdp = Number.isFinite(ng) ? Math.round(ng * 100) / 100 : c.gdp;
+    saveState(); render();
+  }
+
+  // export/import/reset
+  exportBtn.addEventListener('click', () => {
+    const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url;
+    a.download = `vunbar-backup-${new Date().toISOString().slice(0,10)}.json`;
+    document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+  });
+  importBtn.addEventListener('click', () => fileInput.click());
+  fileInput.addEventListener('change', (e) => {
+    const f = e.target.files[0]; if (!f) return;
+    const r = new FileReader();
+    r.onload = () => {
+      try {
+        const parsed = JSON.parse(r.result);
+        // accept either { countries: [...] } or an array
+        let newState;
+        if (parsed && Array.isArray(parsed.countries)) newState = parsed;
+        else if (Array.isArray(parsed)) newState = { countries: parsed };
+        else throw new Error('Invalid format (expected { countries:[...] } or array)');
+        // normalize
+        newState.countries = newState.countries.map(c => ({
+          id: c.id || uid(),
+          name: String(c.name || 'Unnamed'),
+          vunbars: Number.isFinite(Number(c.vunbars)) ? Math.round(Number(c.vunbars)*100)/100 : 0,
+          gdp: Number.isFinite(Number(c.gdp)) ? Math.round(Number(c.gdp)*100)/100 : 0,
+          lastGDPDate: c.lastGDPDate || todayString()
+        }));
+        if (!confirm('Import will replace your current data. Continue?')) return;
+        state = newState;
+        saveState(); render();
+      } catch (err) {
+        alert('Import failed: ' + err.message);
+      }
+    };
+    r.readAsText(f);
+    fileInput.value = '';
+  });
+  resetBtn.addEventListener('click', () => {
+    if (!confirm('Reset and delete ALL countries and balances? This cannot be undone.')) return;
+    state = { countries: [], updatedAt: null };
+    saveState(); render();
+  });
+
+  // wiring
+  addBtn.addEventListener('click', addCountryFromInputs);
+  clearBtn.addEventListener('click', () => { countryNameInput.value=''; initialVunInput.value=''; gdpInput.value=''; });
+  countryNameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') addCountryFromInputs(); });
+  initialVunInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') addCountryFromInputs(); });
+  gdpInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') addCountryFromInputs(); });
+
+  addCustom.addEventListener('click', () => {
+    if (!selectedId) return alert('Select a country first by clicking its card.');
+    const val = Number(customAmt.value);
+    if (!Number.isFinite(val)) return alert('Enter a valid number');
+    changeBalance(selectedId, Math.abs(val)); customAmt.value = '';
+  });
+  subCustom.addEventListener('click', () => {
+    if (!selectedId) return alert('Select a country first by clicking its card.');
+    const val = Number(customAmt.value);
+    if (!Number.isFinite(val)) return alert('Enter a valid number');
+    changeBalance(selectedId, -Math.abs(val)); customAmt.value = '';
+  });
+
+  // initial flow
+  applyAutomaticGDP();
+  render();
+  saveState();
+
+  // expose state for debugging
+  window.vunbarState = () => JSON.parse(JSON.stringify(state));
+})();
+</script>
+</body>
+</html>
